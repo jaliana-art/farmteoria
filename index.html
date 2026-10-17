@@ -20,11 +20,10 @@
       <button class="icon-btn" data-settings aria-label="Настройки">⚙</button>
     </header>
 
-    <section id="resumeBox" class="glass resume" hidden>
-      <div class="resume-txt"><b id="resumeTitle"></b><span id="resumeSub"></span></div>
-      <button id="resumeDrop" class="icon-btn sm" aria-label="Сбросить незаконченное">✕</button>
-      <button id="resumeGo" class="go" aria-label="Продолжить">▶</button>
-    </section>
+    <button id="resumeBox" class="glass resume banner" hidden>
+      <span class="resume-txt"><b id="resumeTitle"></b><span id="resumeSub"></span></span>
+      <span class="go">›</span>
+    </button>
 
     <div class="label">Темы</div>
     <div id="topics" class="topics"></div>
@@ -41,11 +40,7 @@
       <div id="tRing" class="ring"><div id="tRingNum"></div></div>
       <div><h2 id="tName"></h2><div id="tSub" class="label"></div></div>
     </div>
-    <section id="tResume" class="glass resume" hidden>
-      <div class="resume-txt"><b id="tResumeTitle"></b><span id="tResumeSub"></span></div>
-      <button id="tResumeDrop" class="icon-btn sm" aria-label="Сбросить незаконченное">✕</button>
-      <button id="tResumeGo" class="go" aria-label="Продолжить">▶</button>
-    </section>
+    <div id="tResumes" class="resumes"></div>
     <div class="acts">
       <button id="tCards" class="act main"></button>
       <button id="tMix" class="act">Микс</button>
@@ -55,6 +50,13 @@
     <div class="label">Разделы</div>
     <div id="tSections" class="glass list"></div>
     <details id="tPending" class="glass pending" hidden><summary></summary><p></p></details>
+  </main>
+
+  <!-- Незаконченные -->
+  <main id="unfinished" class="screen" hidden>
+    <header class="row"><button id="unfBack" class="text-btn">← Темы</button></header>
+    <h2>Незаконченные</h2>
+    <div id="unfList" class="resumes"></div>
   </main>
 
   <!-- Готова? -->
@@ -168,6 +170,8 @@
       <button id="peekBack" class="btn primary">Вернуться к вопросу</button>
     </div>
   </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
 
   <!-- Поддерживающий «пузырь» -->
   <div id="cheer" class="cheer" role="status" aria-live="polite" hidden><span id="cheerEmoji" class="cheer-emoji"></span><span id="cheerText"></span></div>

@@ -69,24 +69,28 @@ function firstNotDone(tid, from = 0) {
 let screenNow = 'home', screenBefore = 'home';
 // Кнопка «Назад» телефона: внутри приложения держим одну «защитную» запись в истории.
 // Нажали «Назад» → шаг назад по экранам; с главного экрана — обычный выход.
-let hasGuard = false, ignorePop = false;
+let hasGuard = false;
 function show(screen) {
   if (screen === 'settings') screenBefore = screenNow;
   screenNow = screen;
-  for (const s of ['home', 'topic', 'ready', 'settings', 'study', 'quiz', 'results']) $(s).hidden = s !== screen;
+  for (const s of ['home', 'topic', 'unfinished', 'ready', 'settings', 'study', 'quiz', 'results']) $(s).hidden = s !== screen;
   window.scrollTo(0, 0);
-  if (screen === 'home') { if (hasGuard) { hasGuard = false; ignorePop = true; history.back(); } }
-  else if (!hasGuard) { history.pushState({ oz: 1 }, ''); hasGuard = true; }
+  if (screen !== 'home' && !hasGuard) { history.pushState({ oz: 1 }, ''); hasGuard = true; }
 }
 window.addEventListener('popstate', () => {
-  if (ignorePop) { ignorePop = false; return; }
   hasGuard = false;
+  if (screenNow === 'home') return toast('Нажми «Назад» ещё раз, чтобы выйти');
   goBack();
 });
+let toastTimer = null;
+function toast(text) {
+  const t = $('toast'); t.textContent = text; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2200);
+}
 function goBack() {
   switch (screenNow) {
     case 'settings': return $('setBack').click();
-    case 'topic': renderHome(); return show('home');
+    case 'topic': case 'unfinished': renderHome(); return show('home');
     case 'ready': return $('readyBack').click();
     case 'study': return pauseToTopic();
     case 'quiz':
@@ -159,9 +163,8 @@ function renderTopic() {
     row.onclick = () => { const i = s.idx.find(x => !d.has(x)); startBlock(curTid, i ?? s.idx[0]); };
     list.append(row);
   });
-  const s = sessionInfo();
-  $('tResume').hidden = !(s && s.tid === curTid);
-  if (!$('tResume').hidden) { $('tResumeTitle').textContent = `Продолжить · ${s.what}`; $('tResumeSub').textContent = shortDate(s.savedAt); }
+  const box = $('tResumes'); box.innerHTML = '';
+  for (const s of allSessions().filter(x => x.tid === curTid)) box.append(resumeRow(s, 'topic', false));
   const pend = $('tPending');
   pend.hidden = !(t.pending && t.pending.length);
   if (!pend.hidden) {
@@ -368,7 +371,7 @@ function startRun(tid, kind) {
   const sub = kind === 'seq' ? (pos ? `С вопроса ${pos + 1} из ${n}` : `${n} ${plural(n, 'вопрос', 'вопроса', 'вопросов')} по порядку`)
     : kind === 'errors' ? `${retryList.length} ${plural(retryList.length, 'вопрос', 'вопроса', 'вопросов')} с ошибками`
     : `${n} ${plural(n, 'вопрос', 'вопроса', 'вопросов')} вперемешку`;
-  showReady(tid, KIND_LABEL[kind], sub, () => { show('quiz'); nextCard(); }, 'topic');
+  showReady(tid, KIND_LABEL[kind], sub, () => { dropSession(`${tid}:${kind}`); show('quiz'); nextCard(); }, 'topic');
 }
 
 // ── «Готова?» — вопрос читается только после нажатия ──
@@ -385,7 +388,11 @@ function showReady(tid, title, sub, start, backTo) {
   show('ready');
 }
 $('readyGo').onclick = () => { if (readyStart) readyStart(); };
-$('readyBack').onclick = () => { if (readyBackTo === 'home') { renderHome(); show('home'); } else openTopic(run.tid); };
+$('readyBack').onclick = () => {
+  if (readyBackTo === 'unfinished') { renderUnfinished(); show('unfinished'); }
+  else if (readyBackTo === 'home') { renderHome(); show('home'); }
+  else openTopic(run.tid);
+};
 $('rdSpeak').onchange = e => { settings.speak = e.target.checked; saveSettings(); };
 function pauseToTopic() {
   abortListening(); hush();
@@ -396,6 +403,7 @@ function pauseToTopic() {
 // ── Карточки блока ──
 const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 function startBlock(tid, idx) {
+  dropSession(`${tid}:block`);
   resetRun(tid, 'block');
   const b = topicBlocks(tid)[idx];
   block = { idx, cards: b.cards, phase: 'study', studyIdx: 0, quizLeft: [] };
@@ -454,42 +462,77 @@ $('studyBack').onclick = () => pauseToTopic();
 })();
 
 // ── Сохранение занятия: можно прерваться и вернуться ──
+// Незаконченные занятия: отдельно для каждой пары «тема:режим»
+const sessKey = () => `${run.tid}:${run.kind}`;
+function loadSessions() {
+  const all = load('oz.sessions', {});
+  const old = load('oz.session', null);                 // перенос из прежней версии (одно занятие)
+  if (old) { if (old.v === 2 && TOPIC[old.tid]) all[`${old.tid}:${old.kind}`] = old; drop('oz.session'); save('oz.sessions', all); }
+  return all;
+}
+function dropSession(key) { const all = loadSessions(); if (all[key]) { delete all[key]; save('oz.sessions', all); } }
 function saveSession() {
   if (!run.tid || (!current && !block)) return;
-  save('oz.session', {
+  const all = loadSessions();
+  all[sessKey()] = {
     v: 2, tid: run.tid, kind: run.kind,
     currentId: current && !finished && !(block && block.phase === 'study') ? current.id : null,
     asked: session.asked, ok: session.ok, missed: [...session.missed.keys()],
     retry: retryList ? retryList.map(c => c.id) : null,
     block: block ? { idx: block.idx, phase: block.phase, studyIdx: block.studyIdx, quizLeft: block.quizLeft.map(c => c.id) } : null,
     savedAt: Date.now(),
-  });
+  };
+  save('oz.sessions', all);
 }
 const KIND_LABEL = { mix: 'Микс', seq: 'По лекции', block: 'Карточки', errors: 'Ошибки' };
-function sessionInfo() {
-  let s = load('oz.session', null);
-  if (s && (s.v !== 2 || !TOPIC[s.tid])) { drop('oz.session'); return null; }   // старый формат
-  if (!s) return null;
+function allSessions() {
+  return Object.entries(loadSessions())
+    .filter(([, s]) => s && s.v === 2 && TOPIC[s.tid])
+    .map(([key, s]) => sessionInfo(key, s))
+    .sort((a, b) => b.savedAt - a.savedAt);
+}
+function sessionInfo(key, s) {
   const t = TOPIC[s.tid];
-  let what = KIND_LABEL[s.kind] || '';
-  if (s.kind === 'seq') what += ` · ${Math.min((settings.seqPos[s.tid] || 0) + (s.currentId ? 1 : 0), t.cards.length)}/${t.cards.length}`;
-  if (s.block) { const b = topicBlocks(s.tid)[s.block.idx]; if (b) what = blockLabel(b); }
-  return { ...s, what };
+  let detail = `вопрос ${Math.max(s.asked, 1)} · ✓ ${s.ok}`;
+  if (s.kind === 'seq') detail = `${Math.min((settings.seqPos[s.tid] || 0) + (s.currentId ? 1 : 0), t.cards.length)} из ${t.cards.length}`;
+  if (s.block) { const b = topicBlocks(s.tid)[s.block.idx]; if (b) detail = blockLabel(b) + (s.block.phase === 'study' ? '' : ' · опрос'); }
+  return { ...s, key, detail, what: `${KIND_LABEL[s.kind]} · ${detail}` };
+}
+// Строка «Продолжить»: ▶ — продолжить, ✕ — забыть
+function resumeRow(s, from, withTopic) {
+  const t = TOPIC[s.tid];
+  const row = document.createElement('div');
+  row.className = 'glass resume';
+  row.innerHTML = `<span class="num"></span><span class="resume-txt"><b></b><span></span></span>
+    <button class="icon-btn sm" aria-label="Удалить незаконченное">✕</button><button class="go" aria-label="Продолжить">▶</button>`;
+  row.querySelector('.num').textContent = badge(t);
+  row.querySelector('b').textContent = withTopic ? shortName(t) : `Продолжить · ${KIND_LABEL[s.kind]}`;
+  row.querySelector('.resume-txt span').textContent = `${withTopic ? s.what : s.detail} · ${shortDate(s.savedAt)}`;
+  row.querySelector('.icon-btn').onclick = () => {
+    dropSession(s.key);
+    if (screenNow === 'topic') renderTopic(); else { renderUnfinished(); if (!allSessions().length) { renderHome(); show('home'); } }
+  };
+  row.querySelector('.go').onclick = () => resumeSession(s.key, from);
+  return row;
 }
 function renderResume() {
-  const s = sessionInfo();
-  $('resumeBox').hidden = !s;
-  if (!s) return;
-  const t = TOPIC[s.tid];
-  $('resumeTitle').textContent = `${badge(t)} · ${s.what}`;
-  $('resumeSub').textContent = `${shortName(t)} · ${shortDate(s.savedAt)}`;
+  const list = allSessions();
+  $('resumeBox').hidden = !list.length;
+  if (!list.length) return;
+  const last = list[0], t = TOPIC[last.tid];
+  $('resumeTitle').textContent = `Незаконченные · ${list.length}`;
+  $('resumeSub').textContent = `последнее: ${badge(t)} · ${last.what} · ${shortDate(last.savedAt)}`;
 }
-$('resumeGo').onclick = () => resumeSession('home');
-$('tResumeGo').onclick = () => resumeSession('topic');
-$('tResumeDrop').onclick = () => { drop('oz.session'); renderTopic(); };
-function resumeSession(from) {
-  const s = sessionInfo();
-  if (!s) return;
+function renderUnfinished() {
+  const box = $('unfList'); box.innerHTML = '';
+  for (const s of allSessions()) box.append(resumeRow(s, 'unfinished', true));
+}
+$('resumeBox').onclick = () => { renderUnfinished(); show('unfinished'); };
+$('unfBack').onclick = () => { renderHome(); show('home'); };
+function resumeSession(key, from) {
+  const raw = loadSessions()[key];
+  if (!raw || !TOPIC[raw.tid]) return;
+  const s = sessionInfo(key, raw);
   resetRun(s.tid, s.kind);
   const ids = a => (a || []).filter(id => CARD[id]).map(id => CARD[id]);
   session = { asked: s.asked, ok: s.ok, missed: new Map(ids(s.missed).map(c => [c.id, c])) };
@@ -505,7 +548,6 @@ function resumeSession(from) {
     } else nextCard();
   }, from);
 }
-$('resumeDrop').onclick = () => { drop('oz.session'); renderResume(); };
 
 // ── Ход опроса ──
 let attempt = 1, found = new Set(), finished = false, hintLevel = 0, usedHint = false;
@@ -522,7 +564,8 @@ function nextCard() {
       block.done = true;
       if (firstNotDone(run.tid) < 0) seqDone = true;
     }
-    if (seqDone || (run.kind === 'errors' && wasRetry && !block)) drop('oz.session');
+    // доведено до конца — незаконченное этого режима больше не нужно
+    if (seqDone || (block && block.done) || (run.kind === 'errors' && wasRetry)) dropSession(sessKey());
     return showResults();
   }
   session.asked++;
