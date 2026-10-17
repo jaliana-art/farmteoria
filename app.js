@@ -235,8 +235,19 @@ if ('speechSynthesis' in window) {
 $('voice').onchange = e => { settings.voice = e.target.value; saveSettings(); pickVoice(); testVoice(); };
 
 // Текст для голоса: без кавычек и скобок (иначе iPhone читает «quote»), греческие буквы — словами
+// Сокращения читаем по буквам (ЦНС → «цэ-эн-эс»), кроме тех, что говорят словом
+const LETTER = { А: 'а', Б: 'бэ', В: 'вэ', Г: 'гэ', Д: 'дэ', Е: 'е', Ё: 'ё', Ж: 'жэ', З: 'зэ', И: 'и', Й: 'й', К: 'ка', Л: 'эль', М: 'эм', Н: 'эн',
+  О: 'о', П: 'пэ', Р: 'эр', С: 'эс', Т: 'тэ', У: 'у', Ф: 'эф', Х: 'ха', Ц: 'цэ', Ч: 'че', Ш: 'ша', Щ: 'ща', Э: 'э', Ю: 'ю', Я: 'я' };
+const SAY_AS_WORD = new Set(['ЦОГ']);
+function spellAbbr(s) {
+  // без «просмотра назад» в регулярке — старый Safari на iPhone его не понимает
+  return s.replace(/(^|[^А-Яа-яЁё])([А-ЯЁ]{2,5})(?![а-яё])/g, (_, pre, m) =>
+    pre + (SAY_AS_WORD.has(m) ? m.toLowerCase() : [...m].map(ch => LETTER[ch] || ch).join('-')));
+}
 function forSpeech(s) {
-  return s
+  return spellAbbr(s)
+    .replace(/мм\s*рт\.?\s*ст\.?/g, 'миллиметров ртутного столба')
+    .replace(/(\d+)\s*\/\s*(\d+)/g, '$1 на $2')
     .replace(/[«»"“”„'`]/g, '')
     .replace(/[()[\]]/g, ', ')
     .replace(/(\d)\s*[–—-]\s*(\d)/g, '$1 до $2')
