@@ -34,9 +34,9 @@ for (const t of TOPICS) {
   save('oz.progress', progress); save('oz.settings', settings);
 }
 const shortName = t => t.name.replace(/^Тема\s+\d+\.\s*/, '').replace(/\s*\(диктант\)/, '');
-const badge = t => (t.strict ? 'Д' : t.id.replace(/^t/, ''));
+const badge = t => (t.hidden ? '💊' : t.strict ? 'Д' : t.id.replace(/^t/, ''));
 const CARD = {};
-for (const t of TOPICS) for (const c of t.cards) CARD[c.id] = { ...c, tid: t.id, topic: shortName(t), strict: !!t.strict };
+for (const t of TOPICS) for (const c of t.cards) CARD[c.id] = { ...c, tid: c.tid || t.id, topic: shortName(t), strict: !!t.strict };
 const cardsOf = tid => TOPIC[tid].cards.map(c => CARD[c.id]);
 // Раздел «Определения» проверяется всегда строго
 const modeFor = c => (c && c.strict ? 'exam' : settings.mode);
@@ -80,7 +80,7 @@ let hasGuard = false;
 function show(screen) {
   if (screen === 'settings') screenBefore = screenNow;
   screenNow = screen;
-  for (const s of ['home', 'topic', 'unfinished', 'ready', 'settings', 'study', 'quiz', 'results']) $(s).hidden = s !== screen;
+  for (const s of ['home', 'topic', 'unfinished', 'drugsScr', 'ready', 'settings', 'study', 'quiz', 'results']) $(s).hidden = s !== screen;
   window.scrollTo(0, 0);
   if (screen !== 'home' && !hasGuard) { history.pushState({ oz: 1 }, ''); hasGuard = true; }
 }
@@ -104,6 +104,7 @@ function goBack() {
       if (!$('peek').hidden) { closePeek(); history.pushState({ oz: 1 }, ''); hasGuard = true; return; }
       return pauseToTopic();
     case 'results': return $('resBack').click();
+    case 'drugsScr': return $('drugsBack').click();
   }
 }
 const darkMQ = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
@@ -126,6 +127,7 @@ const shortDate = ts => { const d = new Date(ts); return `${String(d.getDate()).
 function renderHome() {
   const box = $('topics'); box.innerHTML = '';
   for (const t of TOPICS) {
+    if (t.hidden) continue;
     const n = t.cards.length, l = learnedIn(t.id);
     const b = document.createElement('button');
     b.className = 'glass topic';
@@ -133,6 +135,13 @@ function renderHome() {
     b.querySelector('.num').textContent = badge(t);
     b.querySelector('.tname').textContent = shortName(t);
     b.onclick = () => openTopic(t.id);
+    box.append(b);
+  }
+  if (TOPIC.drugs) {
+    const b = document.createElement('button');
+    b.className = 'glass topic drugs-entry';
+    b.innerHTML = `<span class="num">💊</span><span class="tbody"><span class="tname">Препараты · все темы</span></span><span class="cnt">${drugNames('all').length}</span>`;
+    b.onclick = () => openDrugs('all');
     box.append(b);
   }
   renderResume();
@@ -171,7 +180,8 @@ function renderTopic() {
     list.append(row);
   });
   const box = $('tResumes'); box.innerHTML = '';
-  for (const s of allSessions().filter(x => x.tid === curTid)) box.append(resumeRow(s, 'topic', false));
+  for (const s of allSessions().filter(x => x.tid === curTid || (x.kind === 'drugs' && x.scope === curTid))) box.append(resumeRow(s, 'topic', false));
+  $('tDrugs').hidden = !drugNames(curTid).length;
   const pend = $('tPending');
   pend.hidden = !(t.pending && t.pending.length);
   if (!pend.hidden) {
@@ -383,6 +393,7 @@ const isSeq = () => run.kind === 'seq' && !retryList;
 
 function pickCard() {
   if (retryList) return retryList.shift() || null;
+  if (run.kind === 'drugs') return (drugList || []).shift() || null;
   if (block) return block.quizLeft.shift() || null;
   if (run.kind === 'seq') {
     seqIndex = settings.seqPos[run.tid] || 0;
@@ -404,6 +415,58 @@ function resetRun(tid, kind) {
   retryList = null; block = null; seqDone = false; current = null;
   cheerState = { last: 0, streak: 0, misses: 0, recent: cheerState.recent, seqMark: 0 };
 }
+// ── Препараты: вопросы только про отдельный препарат (группа + то, что о нём в лекции) ──
+let drugList = null, drugMode = null;
+const drugCards = scope => (TOPIC.drugs ? cardsOf('drugs').filter(c => scope === 'all' || c.tid === scope) : []);
+const drugNames = scope => [...new Set(drugCards(scope).map(c => c.drug))];
+function drugGroups(scope) {
+  const out = [];
+  for (const c of drugCards(scope)) {
+    const key = c.tid + '|' + c.s;
+    let g = out.find(x => x.key === key);
+    if (!g) out.push(g = { key, tid: c.tid, name: c.s, cards: [], drugs: new Set() });
+    g.cards.push(c); g.drugs.add(c.drug);
+  }
+  return out;
+}
+let drugScope = 'all';
+function openDrugs(scope) {
+  drugScope = scope;
+  const names = drugNames(scope);
+  $('dTitle').textContent = scope === 'all' ? 'Препараты · все темы' : `Препараты · ${shortName(TOPIC[scope])}`;
+  $('dSub').textContent = `${names.length} препаратов · ${drugCards(scope).length} вопросов`;
+  const box = $('dGroups'); box.innerHTML = '';
+  drugGroups(scope).forEach((g, k) => {
+    const row = document.createElement('button');
+    row.className = 'sec';
+    row.innerHTML = `<span class="num">${k + 1}</span><span class="sname"></span>${scope === 'all' ? `<span class="tb">${esc(badge(TOPIC[g.tid]))}</span>` : ''}<small>${g.drugs.size}</small>`;
+    row.querySelector('.sname').textContent = g.name;
+    row.onclick = () => startDrugs(scope, 'group', g);
+    box.append(row);
+  });
+  show('drugsScr');
+}
+function startDrugs(scope, mode, g) {
+  resetRun('drugs', 'drugs');
+  run.scope = scope; drugMode = mode;
+  let list, title, sub;
+  if (mode === 'random') {
+    const names = drugNames(scope), d = names[Math.floor(Math.random() * names.length)];
+    list = drugCards(scope).filter(c => c.drug === d);              // сначала «к какой группе», потом факты
+    title = '🎲 Случайный препарат'; sub = `${list.length} ${plural(list.length, 'вопрос', 'вопроса', 'вопросов')} об одном препарате`;
+  } else if (mode === 'group') {
+    list = shuffle(g.cards); title = g.name; sub = `${g.drugs.size} препаратов · ${list.length} вопросов вперемешку`;
+  } else {
+    list = shuffle(drugCards(scope)); title = 'Все препараты'; sub = `${list.length} вопросов вперемешку`;
+  }
+  drugList = list; queue = list.slice();
+  showReady(scope === 'all' ? 'drugs' : scope, title, sub, () => { dropSession(sessKey()); show('quiz'); nextCard(); }, 'drugs');
+}
+$('tDrugs').onclick = () => openDrugs(curTid);
+$('dRandom').onclick = () => startDrugs(drugScope, 'random');
+$('dAll').onclick = () => startDrugs(drugScope, 'all');
+$('drugsBack').onclick = () => { if (drugScope === 'all') { renderHome(); show('home'); } else openTopic(drugScope); };
+
 function startRun(tid, kind) {
   resetRun(tid, kind);
   if (kind === 'seq' && (settings.seqPos[tid] || 0) >= queue.length) { settings.seqPos[tid] = 0; saveSettings(); }
@@ -430,6 +493,7 @@ function showReady(tid, title, sub, start, backTo) {
 }
 $('readyGo').onclick = () => { if (readyStart) readyStart(); };
 $('readyBack').onclick = () => {
+  if (readyBackTo === 'drugs') return openDrugs(run.scope || 'all');
   if (readyBackTo === 'unfinished') { renderUnfinished(); show('unfinished'); }
   else if (readyBackTo === 'home') { renderHome(); show('home'); }
   else openTopic(run.tid);
@@ -506,7 +570,7 @@ $('studyBack').onclick = () => pauseToTopic();
 
 // ── Сохранение занятия: можно прерваться и вернуться ──
 // Незаконченные занятия: отдельно для каждой пары «тема:режим»
-const sessKey = () => `${run.tid}:${run.kind}`;
+const sessKey = () => (run.kind === 'drugs' ? `drugs:drugs@${run.scope}` : `${run.tid}:${run.kind}`);
 function loadSessions() {
   const all = load('oz.sessions', {});
   const old = load('oz.session', null);                 // перенос из прежней версии (одно занятие)
@@ -523,11 +587,12 @@ function saveSession() {
     asked: session.asked, ok: session.ok, missed: [...session.missed.keys()],
     retry: retryList ? retryList.map(c => c.id) : null,
     block: block ? { idx: block.idx, phase: block.phase, studyIdx: block.studyIdx, quizLeft: block.quizLeft.map(c => c.id) } : null,
+    ...(run.kind === 'drugs' ? { scope: run.scope, drugMode, drugs: (drugList || []).map(c => c.id), total: queue.length } : {}),
     savedAt: Date.now(),
   };
   save('oz.sessions', all);
 }
-const KIND_LABEL = { mix: 'Микс', seq: 'По лекции', block: 'Карточки', errors: 'Ошибки' };
+const KIND_LABEL = { mix: 'Микс', seq: 'По лекции', block: 'Карточки', errors: 'Ошибки', drugs: 'Препараты' };
 function allSessions() {
   return Object.entries(loadSessions())
     .filter(([, s]) => s && s.v === 2 && TOPIC[s.tid])
@@ -537,6 +602,7 @@ function allSessions() {
 function sessionInfo(key, s) {
   const t = TOPIC[s.tid];
   let detail = `вопрос ${Math.max(s.asked, 1)} · ✓ ${s.ok}`;
+  if (s.kind === 'drugs') detail = `${s.scope === 'all' ? 'все темы' : shortName(TOPIC[s.scope] || t)} · ${Math.max(s.asked, 1)} из ${s.total || '?'}`;
   if (s.kind === 'seq') detail = `${Math.min((settings.seqPos[s.tid] || 0) + (s.currentId ? 1 : 0), t.cards.length)} из ${t.cards.length}`;
   if (s.block) { const b = topicBlocks(s.tid)[s.block.idx]; if (b) detail = blockLabel(b) + (s.block.phase === 'study' ? '' : ' · опрос'); }
   return { ...s, key, detail, what: `${KIND_LABEL[s.kind]} · ${detail}` };
@@ -583,7 +649,8 @@ function resumeSession(key, from) {
   const bl = s.block && topicBlocks(s.tid)[s.block.idx];
   if (bl) block = { idx: s.block.idx, cards: bl.cards, phase: s.block.phase, studyIdx: s.block.studyIdx || 0, quizLeft: ids(s.block.quizLeft) };
   if (block && block.phase === 'study') return showStudy();
-  showReady(s.tid, 'Продолжение', s.what, () => {
+  if (s.kind === 'drugs') { run.scope = s.scope; drugMode = s.drugMode; drugList = ids(s.drugs); queue = new Array(s.total || drugList.length); }
+  showReady(s.kind === 'drugs' && s.scope !== 'all' ? s.scope : s.tid, 'Продолжение', s.what, () => {
     show('quiz');
     if (s.currentId && CARD[s.currentId]) {
       if (isSeq()) seqIndex = settings.seqPos[s.tid] || 0;
@@ -608,7 +675,7 @@ function nextCard() {
       if (firstNotDone(run.tid) < 0) seqDone = true;
     }
     // доведено до конца — незаконченное этого режима больше не нужно
-    if (seqDone || (block && block.done) || (run.kind === 'errors' && wasRetry)) dropSession(sessKey());
+    if (seqDone || (block && block.done) || (run.kind === 'errors' && wasRetry) || (run.kind === 'drugs' && !wasRetry)) dropSession(sessKey());
     return showResults();
   }
   session.asked++;
@@ -620,7 +687,7 @@ function showCard(card) {
   current = card; lastId = card.id;
   attempt = 1; found = new Set(); finished = false; hintLevel = 0; usedHint = false;
   updateScore();
-  $('qtopic').textContent = block ? curBlockLabel() : current.topic;
+  $('qtopic').textContent = block ? curBlockLabel() : current.drug ? current.s : current.topic;
   $('qkind').textContent = current.strict ? 'строго' : KIND[current.t];
   $('qkind').classList.toggle('strict', !!current.strict);
   $('qtext').textContent = current.q;
@@ -638,7 +705,8 @@ $('repeat').onclick = () => { abortListening(); speak(current.q); };
 
 function updateScore() {
   let txt;
-  if (retryList || run.kind === 'errors') txt = `Ошибки · ${session.asked}`;
+  if (run.kind === 'drugs' && !retryList) txt = `${session.asked} / ${queue.length} · ✓ ${session.ok}`;
+  else if (retryList || run.kind === 'errors') txt = `Ошибки · ${session.asked}`;
   else if (block) txt = `${session.asked} / ${block.cards.length} · ✓ ${session.ok}`;
   else if (isSeq()) txt = `${seqIndex + 1} / ${queue.length} · ✓ ${session.ok}`;
   else txt = `№ ${session.asked} · ✓ ${session.ok}`;
@@ -887,7 +955,7 @@ function goHome() {
   renderHome(); show('home');
 }
 $('back').onclick = pauseToTopic;
-$('resBack').onclick = () => { abortListening(); hush(); openTopic(run.tid); };
+$('resBack').onclick = () => { abortListening(); hush(); if (run.kind === 'drugs') openDrugs(run.scope || 'all'); else openTopic(run.tid); };
 
 // ── Итоги ──
 function answerHtml(c) { return c.a ? esc(c.a) : `<ul>${c.items.map(i => `<li>${esc(i.t)}</li>`).join('')}</ul>`; }
@@ -902,6 +970,7 @@ function showResults() {
   if (blockDone) { title = seqDone ? 'Тема пройдена!' : `«${blockLabel(bl[block.idx])}» пройден`; resumeTxt = next >= 0 ? `Дальше: ${blockLabel(bl[next])}` : 'Пройти заново'; }
   else if (seqDone) { title = 'Лекция пройдена!'; resumeTxt = 'Пройти заново'; }
   else if (run.kind === 'errors') resumeTxt = 'К теме';
+  else if (run.kind === 'drugs') resumeTxt = drugMode === 'random' ? '🎲 Следующий препарат' : 'К препаратам';
   $('resTitle').textContent = title;
   $('resume').textContent = resumeTxt;
   $('restudy').hidden = !blockDone;
@@ -930,6 +999,7 @@ $('resume').onclick = () => {
   }
   if (seqDone && run.kind === 'seq') { settings.seqPos[run.tid] = 0; saveSettings(); return startRun(run.tid, 'seq'); }
   if (run.kind === 'errors') return openTopic(run.tid);
+  if (run.kind === 'drugs') { if (drugMode === 'random' && !(drugList || []).length) return startDrugs(run.scope, 'random'); if (!(drugList || []).length) return openDrugs(run.scope); }
   retryList = null;
   show('quiz'); nextCard();
 };

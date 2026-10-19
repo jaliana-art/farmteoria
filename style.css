@@ -135,6 +135,12 @@ h2 { font: 700 21px/1.2 Unbounded, Manrope, sans-serif; margin: 0; letter-spacin
 .pending summary { cursor: pointer; font-weight: 700; color: var(--muted); }
 .pending p { margin: 8px 0 0; line-height: 1.6; }
 
+/* ── Препараты ── */
+.act.wide { grid-column: 1 / -1; }
+.acts.two { grid-template-columns: 1fr; }
+.drugs-entry .num { border-color: var(--hot); box-shadow: 0 0 12px rgba(255,138,61,.4); font-size: 15px; }
+.sec .tb { font-size: 11px; font-weight: 800; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; }
+
 /* ── Незаконченные ── */
 .resumes { display: flex; flex-direction: column; gap: 8px; }
 .resume.banner { width: 100%; text-align: left; cursor: pointer; appearance: none; color: var(--ink); }

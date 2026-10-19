@@ -46,10 +46,26 @@
       <button id="tMix" class="act">Микс</button>
       <button id="tSeq" class="act">По лекции</button>
       <button id="tErr" class="act">Ошибки</button>
+      <button id="tDrugs" class="act wide">💊 Препараты</button>
     </div>
     <div class="label">Разделы</div>
     <div id="tSections" class="glass list"></div>
     <details id="tPending" class="glass pending" hidden><summary></summary><p></p></details>
+  </main>
+
+  <!-- Препараты -->
+  <main id="drugsScr" class="screen" hidden>
+    <header class="row"><button id="drugsBack" class="text-btn">← Назад</button></header>
+    <div>
+      <h2 id="dTitle">Препараты</h2>
+      <div id="dSub" class="label" style="margin-top:6px"></div>
+    </div>
+    <div class="acts two">
+      <button id="dRandom" class="act main">🎲 Случайный препарат</button>
+      <button id="dAll" class="act wide">Все вперемешку</button>
+    </div>
+    <div class="label">Группы</div>
+    <div id="dGroups" class="glass list"></div>
   </main>
 
   <!-- Незаконченные -->
@@ -207,6 +223,7 @@
   <script src="bank/farm_t06.js"></script>
   <script src="bank/farm_t07.js"></script>
   <script src="bank/farm_t08.js"></script>
+  <script src="bank/farm_drugs.js"></script>
   <script src="checker.js"></script>
   <script src="cheers.js"></script>
   <script src="app.js"></script>
