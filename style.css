@@ -114,7 +114,9 @@ h2 { font: 700 21px/1.2 Unbounded, Manrope, sans-serif; margin: 0; letter-spacin
 .ring { width: 76px; height: 76px; flex: none; border-radius: 50%; display: grid; place-items: center; box-shadow: var(--glow);
   background: conic-gradient(var(--c1) 0 var(--p, 0%), var(--line) var(--p, 0%) 100%); }
 .ring div { width: 64px; height: 64px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; font: 700 16px Unbounded, Manrope, sans-serif; }
-.acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.acts { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.acts .act { grid-column: span 2; }
+.acts .act.half { grid-column: span 3; }
 .act { appearance: none; cursor: pointer; padding: 13px 6px; border-radius: 16px; font-weight: 700; font-size: 14px;
   background: var(--card); border: 1px solid var(--line); color: var(--ink); }
 .act.main { grid-column: 1 / -1; padding: 16px 14px; font-size: 15.5px; color: #fff; border: 0;
@@ -136,7 +138,7 @@ h2 { font: 700 21px/1.2 Unbounded, Manrope, sans-serif; margin: 0; letter-spacin
 .pending p { margin: 8px 0 0; line-height: 1.6; }
 
 /* ── Препараты ── */
-.act.wide { grid-column: 1 / -1; }
+.act.wide, .acts .act.wide, .acts .act.main { grid-column: 1 / -1; }
 .acts.two { grid-template-columns: 1fr; }
 .drugs-entry .num { border-color: var(--hot); box-shadow: 0 0 12px rgba(255,138,61,.4); font-size: 15px; }
 .sec .tb { font-size: 11px; font-weight: 800; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; }
