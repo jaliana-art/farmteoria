@@ -10,12 +10,29 @@ function drop(key) { try { localStorage.removeItem(key); } catch {} }
 const settings = Object.assign({ mode: 'train', voice: '', rate: 1, speak: true, theme: 'system', seqPos: {}, blocksDone: {} },
   load('oz.settings', {}));
 const progress = load('oz.progress', {}); // cardId → { box, seen, ok }
+if (settings.blocksVer !== 2) {
+  settings.blocksVer = 2; settings.blocksDone = {};
+  const ss = load('oz.sessions', {}); for (const k of Object.keys(ss)) if (k.endsWith(':block')) delete ss[k];
+  save('oz.sessions', ss); save('oz.settings', settings);
+}
 const saveSettings = () => save('oz.settings', settings);
 
 // ── Темы, карточки, блоки ──
 const TOPICS = [];
 for (const subj of window.BANK) for (const t of subj.topics) TOPICS.push(t);
 const TOPIC = Object.fromEntries(TOPICS.map(t => [t.id, t]));
+// Тема пересобрана с новой нумерацией вопросов (ver) — прогресс этой темы начинаем заново, чтобы отметки не попали не туда
+settings.topicVer = settings.topicVer || {};
+for (const t of TOPICS) {
+  const ver = t.ver || 1;
+  if ((settings.topicVer[t.id] || 1) === ver) continue;
+  for (const id of Object.keys(progress)) if (id.startsWith(t.id + '-')) delete progress[id];
+  delete settings.seqPos[t.id]; delete settings.blocksDone[t.id];
+  const ss = load('oz.sessions', {}); for (const k of Object.keys(ss)) if (k.startsWith(t.id + ':')) delete ss[k];
+  save('oz.sessions', ss);
+  settings.topicVer[t.id] = ver;
+  save('oz.progress', progress); save('oz.settings', settings);
+}
 const shortName = t => t.name.replace(/^Тема\s+\d+\.\s*/, '').replace(/\s*\(диктант\)/, '');
 const badge = t => (t.strict ? 'Д' : t.id.replace(/^t/, ''));
 const CARD = {};
@@ -26,7 +43,7 @@ const modeFor = c => (c && c.strict ? 'exam' : settings.mode);
 const learnedIn = tid => TOPIC[tid].cards.filter(c => (progress[c.id]?.box || 0) >= 2).length;
 const weakIn = tid => cardsOf(tid).filter(c => progress[c.id] && progress[c.id].seen > 0 && progress[c.id].box === 0);
 
-// Разделы темы → блоки ~по 5 карточек (раздел до 7 карточек — одним блоком)
+// Разделы темы (смысловые группы) → блоки: раздел целиком; совсем маленькие (1–2 карточки) приклеиваются к соседнему
 const BLOCKS = {};
 function topicBlocks(tid) {
   if (BLOCKS[tid]) return BLOCKS[tid];
@@ -36,24 +53,14 @@ function topicBlocks(tid) {
     if (!secs.length || secs[secs.length - 1].name !== name) secs.push({ name, cards: [] });
     secs[secs.length - 1].cards.push(c);
   }
-  const raw = [];
-  secs.forEach((s, si) => {
-    const n = s.cards.length, k = n <= 7 ? 1 : Math.round(n / 5);
-    let at = 0;
-    for (let j = 0; j < k; j++) {
-      const size = Math.floor(n / k) + (j < n % k ? 1 : 0);
-      raw.push({ names: [s.name], sis: [si], part: j + 1, parts: k, cards: s.cards.slice(at, at + size) });
-      at += size;
-    }
-  });
-  // соседние маленькие разделы склеиваем в один блок (до 6 карточек)
   const blocks = [];
-  for (const b of raw) {
+  secs.forEach((s, si) => {
+    const b = { names: [s.name], sis: [si], part: 1, parts: 1, cards: s.cards.slice() };
     const last = blocks[blocks.length - 1];
-    if (last && last.parts === 1 && b.parts === 1 && last.cards.length + b.cards.length <= 6 && (last.cards.length < 4 || b.cards.length < 4)) {
+    if (last && (last.cards.length < 3 || b.cards.length < 3)) {
       last.names.push(...b.names); last.sis.push(...b.sis); last.cards = last.cards.concat(b.cards);
     } else blocks.push(b);
-  }
+  });
   BLOCKS[tid] = blocks; BLOCKS[tid].secs = secs;
   return blocks;
 }
@@ -286,11 +293,11 @@ function startListening() {
   baseText = $('answer').value.trim();
   const r = new Recognition();
   rec = r;
-  r.lang = 'ru-RU'; r.continuous = !IS_ANDROID; r.interimResults = true;
+  r.lang = 'ru-RU'; r.continuous = true; r.interimResults = true;
   // Пишем только в своём «нажатии»: поздние результаты старой записи игнорируются
   r.onresult = e => {
     if (r !== rec && r !== finishing) return;
-    const heard = Array.from(e.results).map(x => x[0].transcript).join(' ').replace(/\s+/g, ' ').trim();
+    const heard = mergeResults(e.results);
     $('answer').value = (baseText ? baseText + ' ' : '') + heard;
   };
   r.onerror = e => {
@@ -313,6 +320,20 @@ function startListening() {
   try { r.start(); } catch { rec = null; }
   updateMic();
 }
+// Chrome на Android в непрерывном режиме иногда повторяет уже сказанное в следующих результатах — склеиваем без повторов
+function mergeResults(results) {
+  let out = '';
+  for (const r of Array.from(results)) {
+    const t = (r[0] && r[0].transcript || '').replace(/\s+/g, ' ').trim();
+    if (!t) continue;
+    const lo = out.toLowerCase(), tl = t.toLowerCase();
+    if (!out) out = t;
+    else if (tl.startsWith(lo)) out = t;          // новый кусок уже содержит всё прежнее
+    else if (lo.endsWith(tl)) continue;            // повтор хвоста
+    else out += ' ' + t;
+  }
+  return out;
+}
 function stopListening() {
   holding = false;
   if (!rec) return updateMic();
@@ -332,13 +353,22 @@ function updateMic() {
   $('micLabel').textContent = !Recognition ? 'Голос недоступен — пиши' : on ? 'Говори… отпусти, чтобы остановить' : 'Удерживай и говори';
 }
 const mic = $('mic');
-mic.addEventListener('pointerdown', e => {
+// На телефоне — сенсорные события: долгое касание не превращается в «меню» и не обрывает запись
+function micDown(e) {
   if (!Recognition) { $('answer').focus(); return; }
-  e.preventDefault();
-  try { mic.setPointerCapture(e.pointerId); } catch {}
+  if (e.cancelable) e.preventDefault();
+  if (holding) return;
   holding = true; startListening();
-});
-for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) mic.addEventListener(ev, () => { if (holding) stopListening(); });
+}
+function micUp() { if (holding) stopListening(); }
+if ('ontouchstart' in window) {
+  mic.addEventListener('touchstart', micDown, { passive: false });
+  mic.addEventListener('touchend', micUp);
+  mic.addEventListener('touchcancel', micUp);
+} else {
+  mic.addEventListener('pointerdown', e => { try { mic.setPointerCapture(e.pointerId); } catch {} micDown(e); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) mic.addEventListener(ev, micUp);
+}
 mic.addEventListener('contextmenu', e => e.preventDefault());
 $('clear').onclick = () => { abortListening(); $('answer').value = ''; baseText = ''; $('answer').focus(); };
 
@@ -449,6 +479,8 @@ function startBlockQuiz() {
   hush();
   block.phase = 'quiz';
   block.quizLeft = shuffle(block.cards);
+  const lastRead = block.cards[block.cards.length - 1], q = block.quizLeft;
+  if (q.length > 1 && q[0] === lastRead) { const j = 1 + Math.floor(Math.random() * (q.length - 1)); [q[0], q[j]] = [q[j], q[0]]; }
   session = { asked: 0, ok: 0, missed: new Map() };
   show('quiz');
   nextCard();
