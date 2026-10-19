@@ -78,9 +78,9 @@ let screenNow = 'home', screenBefore = 'home';
 // Нажали «Назад» → шаг назад по экранам; с главного экрана — обычный выход.
 let hasGuard = false;
 function show(screen) {
-  if (screen === 'settings') screenBefore = screenNow;
+  if ((screen === 'settings' || screen === 'help') && screenNow !== 'settings' && screenNow !== 'help') screenBefore = screenNow;
   screenNow = screen;
-  for (const s of ['home', 'topic', 'unfinished', 'drugsScr', 'ready', 'settings', 'study', 'quiz', 'results']) $(s).hidden = s !== screen;
+  for (const s of ['home', 'topic', 'unfinished', 'drugsScr', 'ready', 'settings', 'help', 'study', 'quiz', 'results']) $(s).hidden = s !== screen;
   window.scrollTo(0, 0);
   if (screen !== 'home' && !hasGuard) { history.pushState({ oz: 1 }, ''); hasGuard = true; }
 }
@@ -97,6 +97,7 @@ function toast(text) {
 function goBack() {
   switch (screenNow) {
     case 'settings': return $('setBack').click();
+    case 'help': return $('helpBack').click();
     case 'topic': case 'unfinished': renderHome(); return show('home');
     case 'ready': return $('readyBack').click();
     case 'study': return pauseToTopic();
@@ -211,6 +212,13 @@ function renderSettings() {
   renderVoices();
 }
 document.querySelectorAll('[data-settings]').forEach(b => b.onclick = () => { renderSettings(); show('settings'); });
+document.querySelectorAll('[data-help]').forEach(b => b.onclick = () => {
+  helpFrom = screenNow;
+  document.querySelectorAll('#help details').forEach(d => { d.open = false; });
+  show('help');
+});
+let helpFrom = 'home';
+$('helpBack').onclick = () => { if (helpFrom === 'settings') { renderSettings(); return show('settings'); } $('setBack').click(); };
 $('setBack').onclick = () => {
   if (screenBefore === 'topic') renderTopic(); else if (screenBefore === 'home') renderHome();
   show(screenBefore);

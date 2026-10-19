@@ -17,7 +17,7 @@
   <main id="home" class="screen">
     <header class="row">
       <h1 class="logo">Устный зачёт</h1>
-      <button class="icon-btn" data-settings aria-label="Настройки">⚙</button>
+      <span class="hdr-btns"><button class="icon-btn" data-help aria-label="Справочник">?</button><button class="icon-btn" data-settings aria-label="Настройки">⚙</button></span>
     </header>
 
     <button id="resumeBox" class="glass resume banner" hidden>
@@ -34,7 +34,7 @@
   <main id="topic" class="screen" hidden>
     <header class="row">
       <button id="topicBack" class="text-btn">← Темы</button>
-      <button class="icon-btn" data-settings aria-label="Настройки">⚙</button>
+      <span class="hdr-btns"><button class="icon-btn" data-help aria-label="Справочник">?</button><button class="icon-btn" data-settings aria-label="Настройки">⚙</button></span>
     </header>
     <div class="topic-head">
       <div id="tRing" class="ring"><div id="tRingNum"></div></div>
@@ -110,6 +110,32 @@
       <div class="label">Оформление</div>
       <div class="seg"><button data-theme-set="light">Светлая</button><button data-theme-set="dark">Тёмная</button><button data-theme-set="system">Авто</button></div>
     </section>
+    <button class="text-btn small help-link" data-help>? Справочник</button>
+    <p class="disclaimer">Учебный тренажёр по лекциям колледжа. Не медицинская рекомендация — не используй его для подбора лечения.</p>
+  </main>
+
+  <!-- Справочник -->
+  <main id="help" class="screen" hidden>
+    <header class="row"><button id="helpBack" class="text-btn">← Назад</button></header>
+    <h2>Справочник</h2>
+    <div class="glass list help">
+      <details><summary>▶ Карточки</summary><p>Учишь тему по кусочкам. Сначала читаешь несколько карточек одного раздела, листая пальцем, потом отвечаешь на них вперемешку. Пройденные кусочки запоминаются, и кнопка ведёт к следующему.</p></details>
+      <details><summary>Микс</summary><p>Вся тема вперемешку без конца. Невыученное попадается чаще, выученное реже.</p></details>
+      <details><summary>По лекции</summary><p>Вопросы по порядку, как в лекции. Место запоминается — можно продолжить с того же вопроса.</p></details>
+      <details><summary>Ошибки</summary><p>Только вопросы, где ты ошиблась. Ответишь верно сразу и без подсказки — вопрос уйдёт из списка.</p></details>
+      <details><summary>🎲 10 наугад</summary><p>10 случайных вопросов из темы. Каждый раз новые, пока не пройдёшь всю тему по кругу.</p></details>
+      <details><summary>💊 Препараты</summary><p>Вопросы про отдельные препараты: к какой группе относится и что о нём сказано в лекции. Можно случайный препарат, группу или все вперемешку.</p></details>
+      <details><summary>Разделы</summary><p>Нажми на раздел в теме — начнутся карточки именно этого раздела.</p></details>
+      <details><summary>🎤 Как отвечать</summary><p>Удерживай кнопку микрофона и говори, отпусти — запись остановится. Можно говорить в несколько заходов или написать текстом. Потом «Проверить».</p></details>
+      <details><summary>💡 Подсказка и вторая попытка</summary><p>Подсказка открывается по шагу за нажатие. Если ответ неполный, приложение покажет, что уже названо, и даст вторую попытку. «Не знаю — ответ» сразу покажет правильный ответ.</p></details>
+      <details><summary>Засчитать</summary><p>Если ответила верно, но другими словами, и проверка не поняла — нажми «Засчитать».</p></details>
+      <details><summary>Выучено</summary><p>Вопрос считается выученным, когда ты дважды ответила на него сразу и без подсказки. Ошибка сбрасывает счёт.</p></details>
+      <details><summary>⏸ Пауза и «Продолжить»</summary><p>Пауза сохраняет занятие. Продолжить можно из темы или с главного экрана — строка «Незаконченные».</p></details>
+      <details><summary>🔊 и ↶ Прошлые</summary><p>🔊 — прочитать вопрос ещё раз. ↶ — посмотреть прошлые вопросы этого занятия.</p></details>
+      <details><summary>Тренировка или Экзамен</summary><p>В настройках. «Тренировка» прощает мелочи, «Экзамен» требует всё целиком. Определения всегда проверяются строго.</p></details>
+      <details><summary>Прогресс</summary><p>Хранится только в этом телефоне и этом браузере. На другом телефоне или по другой ссылке начнётся с нуля.</p></details>
+    </div>
+    <p class="disclaimer">Учебный тренажёр по лекциям колледжа. Не медицинская рекомендация — не используй его для подбора лечения.</p>
   </main>
 
   <!-- Карточки блока -->
